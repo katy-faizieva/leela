@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Премиальная оливково-молочная палитра */
+    --background: 50 20% 96%; /* #F7F6F2 светло-молочный */
+    --foreground: 0 0% 23%; /* #3A3A3A тёмно-серый */
+    --card: 0 0% 100%; /* белый */
+    --card-foreground: 0 0% 23%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 23%;
+    --primary: 90 22% 63%; /* #A3B18A светло-оливковый */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 50 20% 96%;
+    --secondary-foreground: 0 0% 23%;
+    --muted: 90 15% 90%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 90 26% 54%; /* #8E9F74 насыщенный оливковый */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 90 15% 85%;
+    --input: 90 15% 90%;
+    --ring: 90 22% 63%;
+    --radius: 0.75rem;
+    
+    /* Дополнительные цвета */
+    --olive: #A3B18A;
+    --olive-dark: #8E9F74;
+    --cream: #F7F6F2;
+    --text-dark: #3A3A3A;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-montserrat), sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-playfair), serif;
+  }
+}
+
+[data-hydration-error] {
+  display: none !important;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

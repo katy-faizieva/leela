@@ -1,0 +1,108 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Booking {
+  id            Int           @id @default(autoincrement())
+  name          String
+  email         String
+  phone         String
+  lessonType    LessonType
+  level         EnglishLevel
+  date          DateTime
+  timeSlot      String
+  message       String?
+  status        BookingStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentId     String?
+  createdAt     DateTime      @default(now())
+  payment       Payment?
+
+  @@index([date])
+  @@index([email])
+}
+
+model TimeSlot {
+  id          Int      @id @default(autoincrement())
+  dayOfWeek   Int
+  time        String
+  isAvailable Boolean  @default(true)
+  maxBookings Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@unique([dayOfWeek, time])
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  name       String
+  photo      String
+  rating     Int
+  text       String
+  occupation String?
+  createdAt  DateTime @default(now())
+}
+
+model ContactMessage {
+  id        Int           @id @default(autoincrement())
+  name      String
+  email     String
+  phone     String?
+  message   String
+  status    MessageStatus @default(NEW)
+  createdAt DateTime      @default(now())
+
+  @@index([createdAt])
+}
+
+model Payment {
+  id              Int           @id @default(autoincrement())
+  bookingId       Int           @unique
+  stripeSessionId String
+  amount          Float
+  currency        String        @default("rub")
+  status          PaymentStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([stripeSessionId])
+}
+
+enum LessonType {
+  INDIVIDUAL
+  PAIR
+  GROUP
+}
+
+enum EnglishLevel {
+  BEGINNER
+  ELEMENTARY
+  INTERMEDIATE
+  UPPER_INTERMEDIATE
+  ADVANCED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum MessageStatus {
+  NEW
+  READ
+  REPLIED
+}
