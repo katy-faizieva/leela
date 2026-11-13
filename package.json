@@ -32,8 +32,6 @@
     "typescript": "5.6.3"
   },
   "dependencies": {
-    "qrcode.react": "^4.2.0",
-    "stripe": "^17.7.0",
     "@auth/prisma-adapter": "2.11.3",
     "@prisma/client": "6.7.0",
     "@radix-ui/react-accordion": "1.2.0",
@@ -90,5 +88,11 @@
   },
   "engines": {
     "node": "22.x"
-  }
+  },
+  "resolutions": {
+    "motion-dom": "12.23.12",
+    "motion-utils": "12.23.6"
+  },
+  "version": "1.0.0",
+  "packageManager": "yarn@4.13.0"
 }
