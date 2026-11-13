@@ -1,0 +1,11 @@
+{
+  "secret_values_found": 0,
+  "absolute_vm_paths_found": 0,
+  "platform_runtime_urls_found": 0,
+  "symlinks": 0,
+  "original_board_sha256": {
+    "board.png": "2d17554347da8a2ba60f660b9ce32e0556221843a3720a7c7afd5ce91caf9c76",
+    "board-screen-v1.webp": "82b12e279241b2f196fec20cbd304eb4d07a11091d3706f71e0b38104b06039d"
+  },
+  "database_records_exported": false
+}

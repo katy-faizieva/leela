@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>India, 2026 — a story</title>
+
+
+<!-- reference bundle: the kit sits two levels up; a built story loads ./kit/… -->
+<link rel="stylesheet" href="../../abacus-viz.css"/><link rel="stylesheet" href="../../abacus-stage.css"/>
+<script src="../../echarts.min.js"></script><script src="../../abacus-viz.js"></script><script src="../../abacus-stage.js"></script></head>
+<body><main id="story"></main><script>
+fetch('./dashboard.json').then(r => r.json()).then(manifest => {
+  const keys = [...new Set(manifest.tiles.map(t => t.data))];
+  const scenes = manifest.scenes || [];
+  return Promise.all([
+    Promise.all(keys.map(k => fetch('./data/' + k + '.json').then(r => r.json()))),
+    Promise.all(scenes.map(s => fetch('./' + s.html).then(r => r.text()))),
+  ]).then(([rows, html]) => {
+    const data = Object.fromEntries(keys.map((k, i) => [k, rows[i]]));
+    const sceneHtml = Object.fromEntries(scenes.map((s, i) => [s.id, html[i]]));
+    window.__viz = AbacusStage.mount(document.getElementById('story'), manifest, data, sceneHtml);
+  });
+});
+</script></body></html>

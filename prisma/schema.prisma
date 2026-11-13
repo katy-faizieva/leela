@@ -1,5 +1,7 @@
 generator client {
     provider = "prisma-client-js"
+    binaryTargets = ["native", "rhel-openssl-3.0.x"]
+    output = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -7,102 +9,54 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model Booking {
-  id            Int           @id @default(autoincrement())
-  name          String
-  email         String
-  phone         String
-  lessonType    LessonType
-  level         EnglishLevel
-  date          DateTime
-  timeSlot      String
-  message       String?
-  status        BookingStatus @default(PENDING)
-  paymentStatus PaymentStatus @default(PENDING)
-  paymentId     String?
-  createdAt     DateTime      @default(now())
-  payment       Payment?
-
-  @@index([date])
-  @@index([email])
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         String   @default("user")
+  blocked      Boolean  @default(false)
+  approved     Boolean  @default(true)
+  accessExpiresAt DateTime?
+  maxPlayers   Int      @default(4)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  games        Game[]
 }
 
-model TimeSlot {
-  id          Int      @id @default(autoincrement())
-  dayOfWeek   Int
-  time        String
-  isAvailable Boolean  @default(true)
-  maxBookings Int      @default(1)
-  createdAt   DateTime @default(now())
-
-  @@unique([dayOfWeek, time])
+model Cell {
+  number      Int    @id
+  name        String
+  sanskrit    String @default("")
+  essence     String @default("")
+  description String @default("")
+  path        String @default("")
+  questions   String @default("[]")
 }
 
-model Review {
-  id         Int      @id @default(autoincrement())
-  name       String
-  photo      String
-  rating     Int
-  text       String
-  occupation String?
-  createdAt  DateTime @default(now())
+model Game {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state     String    @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  logs      GameLog[]
+
+  @@index([userId])
 }
 
-model ContactMessage {
-  id        Int           @id @default(autoincrement())
-  name      String
-  email     String
-  phone     String?
-  message   String
-  status    MessageStatus @default(NEW)
-  createdAt DateTime      @default(now())
+model GameLog {
+  id             String   @id @default(cuid())
+  gameId         String
+  game           Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerName     String
+  roll           Int
+  fromCell       Int
+  toCell         Int
+  transitionType String?  
+  note           String?  @db.Text
+  createdAt      DateTime @default(now())
 
-  @@index([createdAt])
-}
-
-model Payment {
-  id              Int           @id @default(autoincrement())
-  bookingId       Int           @unique
-  stripeSessionId String
-  amount          Float
-  currency        String        @default("rub")
-  status          PaymentStatus @default(PENDING)
-  createdAt       DateTime      @default(now())
-  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
-  @@index([stripeSessionId])
-}
-
-enum LessonType {
-  INDIVIDUAL
-  PAIR
-  GROUP
-}
-
-enum EnglishLevel {
-  BEGINNER
-  ELEMENTARY
-  INTERMEDIATE
-  UPPER_INTERMEDIATE
-  ADVANCED
-}
-
-enum BookingStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
-  COMPLETED
-}
-
-enum PaymentStatus {
-  PENDING
-  PAID
-  FAILED
-  REFUNDED
-}
-
-enum MessageStatus {
-  NEW
-  READ
-  REPLIED
+  @@index([gameId])
 }

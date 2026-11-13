@@ -1,8 +1,12 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
+module.exports = {
   poweredByHeader: false,
-  eslint: { ignoreDuringBuilds: true },
+  productionBrowserSourceMaps: false,
   images: { unoptimized: true },
-};
-
-module.exports = nextConfig;
+  outputFileTracingRoot: __dirname,
+  outputFileTracingIncludes: {
+    '/api/board': ['./data/board-screen-v1.webp'],
+    '/api/games/*/pdf/status': ['./data/fonts/*.ttf'],
+  },
+  serverExternalPackages: ['pdfkit'],
+}

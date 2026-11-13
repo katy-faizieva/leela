@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "corepack yarn install",
+  "buildCommand": "corepack yarn build",
+  "functions": {
+    "app/api/games/[id]/pdf/status/route.ts": { "maxDuration": 60 }
+  }
+}

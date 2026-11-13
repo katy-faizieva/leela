@@ -1,109 +1,25 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/db'
+import bcrypt from 'bcryptjs'
+import { CELLS_DATA } from '../config/cells-data'
 
 async function main() {
-  console.log('Starting database seed...');
-
-  const reviews = [
-    {
-      name: 'Анна Смирнова',
-      photo: '/images/54579725-cb1f-44e4-8e7b-b2fbc1154ecd.png',
-      rating: 5,
-      text: 'Занимаюсь с Екатериной уже полгода. Мой уровень английского значительно вырос! Уроки проходят интересно, материал подаётся доступно. Рекомендую!',
-      occupation: 'Студентка',
-    },
-    {
-      name: 'Дмитрий Петров',
-      photo: '/images/070d9b65-2ebc-42fe-8720-f5b0d1549772.png',
-      rating: 5,
-      text: 'Отличный преподаватель! Готовился к IELTS, сдал на 7.5 баллов. Екатерина помогла структурировать знания и повысить уверенность в говорении.',
-      occupation: 'Менеджер',
-    },
-    {
-      name: 'Мария Козлова',
-      photo: '/images/9458d60a-6233-425f-88fa-2638370223ef.png',
-      rating: 5,
-      text: 'Чудесные уроки! Всёгда боялась говорить на английском, но Екатерина создала комфортную атмосферу. Теперь свободно общаюсь с иностранцами!',
-      occupation: 'Школьница',
-    },
-    {
-      name: 'Алексей Волков',
-      photo: '/images/8f4ac27f-1f57-4ccf-8dcc-fe6a20e625c3.png',
-      rating: 5,
-      text: 'Профессиональный подход к обучению. Уроки всегда хорошо спланированы, много разговорной практики. Прогресс заметен уже через несколько занятий.',
-      occupation: 'IT-специалист',
-    },
-    {
-      name: 'Елена Соколова',
-      photo: '/images/2d4b8546-a05d-40d9-a22a-e64bb1a0162f.png',
-      rating: 5,
-      text: 'Очень довольна занятиями! Екатерина находит подход к каждому ученику. Онлайн-формат очень удобен, можно заниматься из дома.',
-      occupation: 'Бухгалтер',
-    },
-    {
-      name: 'Ольга Новикова',
-      photo: '/images/5e994ec7-b618-47aa-97d6-098c0ab232fc.png',
-      rating: 5,
-      text: 'Занимаюсь в группе с подругами. Очень весёло и продуктивно! Екатерина умеет заинтересовать и мотивировать. Цены адекватные.',
-      occupation: 'Маркетолог',
-    },
-    {
-      name: 'Игорь Морозов',
-      photo: '/images/ee68d076-03a4-4a59-b6d8-4e3201b70c08.png',
-      rating: 5,
-      text: 'Великолепный преподаватель! Помогла подготовиться к собеседованию на английском. Уроки насыщенные, но не перегруженные. Результатом очень доволен!',
-      occupation: 'Продавец',
-    },
-  ];
-
-  console.log('Seeding reviews...');
-  for (const review of reviews) {
-    await prisma.review.upsert({
-      where: { id: reviews.indexOf(review) + 1 },
-      update: {},
-      create: review,
-    });
+  for (const cell of CELLS_DATA) {
+    await prisma.cell.upsert({ where: { number: cell.number }, update: {}, create: cell })
   }
-  console.log(`${reviews.length} reviews seeded.`);
-
-  const timeSlots = [];
-  const times = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
-  
-  for (let day = 1; day <= 5; day++) {
-    for (const time of times) {
-      timeSlots.push({
-        dayOfWeek: day,
-        time,
-        isAvailable: true,
-        maxBookings: 3,
-      });
-    }
+  console.log('Исходные клетки добавлены; существующие описания сохранены.')
+  const email = (process.env.OWNER_EMAIL || 'admin@mail.ru').trim().toLowerCase()
+  const password = process.env.OWNER_PASSWORD
+  if (process.env.PROMOTE_GAME_OWNER === 'true') {
+    await prisma.user.update({ where: { email }, data: { role: 'owner', approved: true, blocked: false, accessExpiresAt: null, maxPlayers: 4 } })
+    console.log('Существующему аккаунту выданы права владельца. Пароль не изменён.')
+  } else if (password) {
+    if (password.length < 12 || Buffer.byteLength(password, 'utf8') > 72) throw new Error('Пароль владельца: минимум 12 символов, максимум 72 байта UTF-8.')
+    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+    if (existing) { console.log('Аккаунт уже существует; пароль и права сохранены.'); return }
+    await prisma.user.create({ data: { email, name: process.env.OWNER_NAME || 'Владелец', passwordHash: await bcrypt.hash(password, 12), role: 'owner', approved: true, blocked: false, maxPlayers: 4 } })
+    console.log('Создан владелец с указанными вами реквизитами. Удалите OWNER_PASSWORD из окружения.')
+  } else {
+    console.log('Аккаунты не создавались: OWNER_PASSWORD не задан.')
   }
-
-  console.log('Seeding time slots...');
-  for (const slot of timeSlots) {
-    await prisma.timeSlot.upsert({
-      where: {
-        dayOfWeek_time: {
-          dayOfWeek: slot.dayOfWeek,
-          time: slot.time,
-        },
-      },
-      update: {},
-      create: slot,
-    });
-  }
-  console.log(`${timeSlots.length} time slots seeded.`);
-
-  console.log('Database seed completed!');
 }
-
-main()
-  .catch((e) => {
-    console.error('Error during seeding:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((e) => { console.error(e); process.exitCode = 1 }).finally(() => prisma.$disconnect())
