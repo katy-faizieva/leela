@@ -32,6 +32,8 @@
     "typescript": "5.6.3"
   },
   "dependencies": {
+"qrcode.react": "^4.2.0",
+    "stripe": "^17.7.0",
     "@auth/prisma-adapter": "2.11.3",
     "@prisma/client": "6.7.0",
     "@radix-ui/react-accordion": "1.2.0",
