@@ -11,7 +11,7 @@ import { CellModal } from './cell-modal'
 import { PlayerPdfExport } from './player-pdf-export'
 import { AppNavigation } from './app-navigation'
 import { PathEditor } from './path-editor'
-import { SNAKES, ARROWS, BOARD_SIZE, FINAL_CELL, DEFAULT_SETTINGS } from '@/config/game-config'
+import { SNAKES, ARROWS, BOARD_SIZE, FINAL_CELL, DEFAULT_SETTINGS, resolveMove } from '@/config/game-config'
 import { LogOut, Settings, Shield, Menu, X, BookOpen } from 'lucide-react'
 import type { CellData, GameState, PlayerState, GameLog, SavedGame } from '@/lib/game-types'
 
@@ -72,7 +72,6 @@ export function GamePage({ user }: Props) {
     }).catch(e => console.error(e))
     return () => { active = false }
   }, [isAdmin])
-
 
   const startNewGame = useCallback(async (players: { name: string; intention: string }[], settings: typeof DEFAULT_SETTINGS, diceMode: 'auto' | 'manual') => {
     const playerStates: PlayerState[] = players.map((p, i) => ({
@@ -174,8 +173,8 @@ export function GamePage({ user }: Props) {
     const roll = manualValue ?? (Math.floor(Math.random() * 6) + 1)
     setLastRoll(roll)
 
-    // Wait for animation
-    await new Promise(r => setTimeout(r, 800))
+    // Анимация броска кубика
+    await new Promise(r => setTimeout(r, 600))
 
     const currentPlayer = gameState.players[gameState.currentPlayerIndex]
     if (!currentPlayer || currentPlayer.finished) {
@@ -185,41 +184,48 @@ export function GamePage({ user }: Props) {
     }
 
     const fromCell = currentPlayer.position
-    let newPosition = fromCell + roll
-    let transitionType: string | null = null
+    const { landedCell, finalCell: newPosition, transitionType } = resolveMove(
+      fromCell,
+      roll,
+      gameState.settings.bounceOnOvershoot
+    )
 
-    // Player needs 1 to enter the board
-    if (fromCell === 0) {
-      if (roll === 6) {
-        newPosition = 6
-      } else {
-        newPosition = roll
+    // 1. Сначала фишка проходит все шаги кубика до клетки остановки (landedCell)
+    // Промежуточные клетки (тела змей, древко стрел) полностью игнорируются
+    if (landedCell !== fromCell) {
+      const stepDirection = landedCell > fromCell ? 1 : -1
+      for (let step = fromCell + stepDirection; ; step += stepDirection) {
+        setGameState(prev => {
+          if (!prev) return prev
+          const updatedPlayers = [...prev.players]
+          updatedPlayers[prev.currentPlayerIndex] = {
+            ...updatedPlayers[prev.currentPlayerIndex],
+            position: step,
+          }
+          return { ...prev, players: updatedPlayers }
+        })
+        await new Promise(r => setTimeout(r, 220))
+        if (step === landedCell) break
       }
     }
 
-    // Check overshoot
-    if (newPosition > FINAL_CELL) {
-      if (gameState.settings.bounceOnOvershoot) {
-        newPosition = FINAL_CELL - (newPosition - FINAL_CELL)
-      } else {
-        // Stay in place
-        newPosition = fromCell
-      }
+    // 2. Фишка полностью остановилась. Если сработала змея или стрела — делаем переход
+    if (newPosition !== landedCell) {
+      await new Promise(r => setTimeout(r, 350))
+      setGameState(prev => {
+        if (!prev) return prev
+        const updatedPlayers = [...prev.players]
+        updatedPlayers[prev.currentPlayerIndex] = {
+          ...updatedPlayers[prev.currentPlayerIndex],
+          position: newPosition,
+        }
+        return { ...prev, players: updatedPlayers }
+      })
+      await new Promise(r => setTimeout(r, 650))
     }
 
-    // Check for snakes/arrows
-    if (SNAKES[newPosition] !== undefined) {
-      transitionType = `Змея: ${newPosition} → ${SNAKES[newPosition]}`
-      newPosition = SNAKES[newPosition]
-    } else if (ARROWS[newPosition] !== undefined) {
-      transitionType = `Стрела: ${newPosition} → ${ARROWS[newPosition]}`
-      newPosition = ARROWS[newPosition]
-    }
-
-    // Check win
     const finished = newPosition === FINAL_CELL
 
-    // Update state
     const newPlayers = [...gameState.players]
     newPlayers[gameState.currentPlayerIndex] = {
       ...currentPlayer,
@@ -227,11 +233,9 @@ export function GamePage({ user }: Props) {
       finished,
     }
 
-    // Next player
     let nextIndex = gameState.currentPlayerIndex
     const shouldExtraRoll = roll === 6 && gameState.settings.extraRollOnSix && !finished
     if (!shouldExtraRoll) {
-      // Find next unfinished player
       for (let i = 1; i <= newPlayers.length; i++) {
         const idx = (gameState.currentPlayerIndex + i) % newPlayers.length
         if (!newPlayers[idx]?.finished) {
@@ -252,186 +256,15 @@ export function GamePage({ user }: Props) {
 
     setGameState(newState)
     try {
-    await saveGameState(newState, {
-      gameId: gameId || '',
-      playerName: currentPlayer.name,
-      roll,
-      fromCell,
-      toCell: newPosition,
-      transitionType,
-      note: null,
-    })
-
-    // Keep the lock through the token's CSS movement, not just the dice animation.
-    await new Promise(resolve => setTimeout(resolve, 750))
+      await saveGameState(newState, {
+        gameId: gameId || '',
+        playerName: currentPlayer.name,
+        roll,
+        fromCell,
+        toCell: newPosition,
+        transitionType,
+        note: null,
+      })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Не удалось сохранить ход. Обновите страницу перед продолжением.')
       setGameState(gameState)
-      setSynced(false)
-      try { applyGame(await fetch(`/api/games/${gameId}`, { cache: 'no-store' }).then(requireResponse)) } catch (refreshError) { console.error(refreshError); setSyncError('Не удалось обновить путь. Дождитесь восстановления связи.') }
-      return
-    } finally { turnLock.current = false; setIsRolling(false) }
-
-    // Auto-open cell card
-    if (isAdmin && newPosition > 0 && newPosition !== fromCell) {
-      setSelectedCell(newPosition)
-    }
-  }, [gameState, isRolling, gameId, saveGameState, isAdmin, editing, synced, applyGame])
-
-  const exportHistory = useCallback(() => setShowPdf(true), [])
-
-  const addNote = useCallback(async (logId: string, note: string, expectedNote: string) => {
-    generation.current++
-    const updated = await fetch(`/api/game-logs/${logId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note, expectedNote }) }).then(requireResponse)
-    generation.current++
-    setLogs(prev => prev.map(l => l?.id === logId ? updated : l))
-  }, [])
-
-  const leaveBoard = useCallback((tab: 'new' | 'continue' = 'continue') => {
-    if (turnLock.current) return
-    generation.current++
-    setSetupTab(tab)
-    setShowSetup(true)
-    setGameState(null)
-    setGameId(null)
-    setActiveGame(null)
-    setLogs([])
-    setLastRoll(null)
-    setSelectedCell(null)
-    setShowHistory(false)
-    setShowMenu(false)
-    setShowPdf(false)
-    window.history.replaceState(null, '', tab === 'continue' ? '/?view=saved' : '/')
-  }, [])
-
-  const confirmNewGame = useCallback(() => {
-    if (turnLock.current) return
-    if (gameState && !gameState.finished) {
-      if (!window.confirm('Начать новую игру? Текущий прогресс сохранён.')) return
-    }
-    leaveBoard('new')
-  }, [gameState, leaveBoard])
-
-  if (showSetup) {
-    return (
-      <div className="min-h-screen" style={{ background: '#FAF6F0' }}>
-        <header className="sticky top-0 z-50 px-4 py-3 flex items-center justify-between" style={{ background: 'rgba(250,246,240,0.9)', backdropFilter: 'blur(8px)', borderBottom: '1px solid rgba(74,14,23,0.1)' }}>
-          <AppNavigation disabled={isStarting} onBack={setupTab === 'continue' ? () => setSetupTab('new') : undefined} onNew={() => setSetupTab('new')} onSaved={() => setSetupTab('continue')} />
-          <div className="flex items-center gap-3">
-            {isAdmin && (
-              <a href="/admin" className="text-sm flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity" style={{ color: '#4A0E17' }}>
-                <Shield className="w-4 h-4" /> Панель
-              </a>
-            )}
-            <button onClick={() => signOut({ redirectTo: '/login' })} className="text-sm flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity" style={{ color: '#4A0E17' }}>
-              <LogOut className="w-4 h-4" /> Выход
-            </button>
-          </div>
-        </header>
-        <GameSetup
-          onStart={startNewGame}
-          isAdmin={isAdmin}
-          initialTab={setupTab}
-          onTabChange={setSetupTab}
-          onLoadGame={loadGame}
-          userName={user?.name ?? user?.email ?? ''}
-          maxPlayers={session?.user?.maxPlayers ?? user.maxPlayers ?? 4}
-          busy={isStarting}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#FAF6F0' }}>
-      {/* Header */}
-      <header className="sticky top-0 z-50 px-4 py-2 flex items-center justify-between" style={{ background: 'rgba(250,246,240,0.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid rgba(74,14,23,0.1)' }}>
-        <AppNavigation disabled={isRolling} onBack={() => { if (showHistory) setShowHistory(false); else leaveBoard() }} onNew={confirmNewGame} onSaved={() => leaveBoard()} onHistory={() => setShowHistory(true)} onPdf={exportHistory} />
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowHistory(!showHistory)} className="p-2 rounded-lg hover:bg-secondary transition-colors" title="История">
-            <BookOpen className="w-4 h-4" style={{ color: '#4A0E17' }} />
-          </button>
-          <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-lg hover:bg-secondary transition-colors md:hidden">
-            {showMenu ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
-          <div className="hidden md:flex items-center gap-3">
-            {isAdmin && (
-              <a href="/admin" className="text-xs flex items-center gap-1 opacity-60 hover:opacity-100" style={{ color: '#4A0E17' }}>
-                <Shield className="w-3 h-3" /> Панель
-              </a>
-            )}
-            <button onClick={confirmNewGame} className="text-xs opacity-60 hover:opacity-100" style={{ color: '#4A0E17' }}>Новая игра</button>
-            <button onClick={() => signOut({ redirectTo: '/login' })} className="text-xs flex items-center gap-1 opacity-60 hover:opacity-100" style={{ color: '#4A0E17' }}>
-              <LogOut className="w-3 h-3" /> Выход
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile menu */}
-      {showMenu && (
-        <div className="md:hidden px-4 py-3 flex flex-col gap-2 border-b" style={{ background: 'rgba(250,246,240,0.95)', borderColor: 'rgba(74,14,23,0.1)' }}>
-          {isAdmin && (
-            <a href="/admin" className="text-sm py-2" style={{ color: '#4A0E17' }}>Панель владельца</a>
-          )}
-          <button onClick={confirmNewGame} className="text-sm py-2 text-left" style={{ color: '#4A0E17' }}>Новая игра</button>
-          <button onClick={exportHistory} className="text-sm py-2 text-left" style={{ color: '#4A0E17' }}>PDF участника</button>
-          <button onClick={() => signOut({ redirectTo: '/login' })} className="text-sm py-2 text-left" style={{ color: '#4A0E17' }}>Выход</button>
-        </div>
-      )}
-
-      <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 bg-white/50 text-sm">
-        <div><p className="font-semibold">{gameState?.title || gameState?.players.map(p => p.name).join(', ')}</p>{isAdmin && activeGame?.user && <p className="text-xs text-muted-foreground">Аккаунт: <span suppressHydrationWarning>{activeGame.user.email}</span></p>}<p role="status" className={syncError ? 'text-red-800' : 'text-muted-foreground'}>{syncError || (synced ? 'Синхронизация включена · обновление каждые 2 секунды' : 'Подключение…')}</p></div>
-        {isAdmin && <button disabled={isRolling || !synced} onClick={() => { generation.current++; setEditing(true) }} className="flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 disabled:opacity-50"><Settings className="w-4 h-4" />Управлять путём</button>}
-      </div>
-      {/* Main content */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-0 overflow-hidden">
-        {/* Board */}
-        <div className="flex-1 flex items-center justify-center p-2 lg:p-4 overflow-auto">
-          <GameBoard
-            gameState={gameState}
-            onCellClick={isAdmin ? setSelectedCell : undefined}
-            userEmail={user?.email ?? ''}
-            hideWatermark={isAdmin}
-          />
-        </div>
-
-        {/* Side panel */}
-        <div className="lg:w-80 w-full lg:border-l border-t lg:border-t-0 flex-shrink-0 overflow-y-auto" style={{ borderColor: 'rgba(74,14,23,0.1)', maxHeight: 'calc(100vh - 48px)' }}>
-          {showHistory ? (
-            <GameHistory
-              logs={logs}
-              cells={cells}
-              players={gameState?.players ?? []}
-              onClose={() => setShowHistory(false)}
-              onExport={exportHistory}
-              onAddNote={addNote}
-              onCellClick={isAdmin ? setSelectedCell : undefined}
-            />
-          ) : (
-            <GamePanel
-              gameState={gameState}
-              isRolling={isRolling || !synced}
-              lastRoll={lastRoll}
-              onRoll={rollDice}
-              onNewGame={confirmNewGame}
-              onExport={exportHistory}
-              cells={cells}
-            />
-          )}
-        </div>
-      </div>
-
-      {showPdf && gameId && gameState && <div role="dialog" aria-modal="true" aria-label="Личный путь в PDF" className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4"><div className="w-full max-w-md rounded-xl bg-background p-4 shadow-lg"><button onClick={() => setShowPdf(false)} className="block ml-auto mb-2 px-3 py-1">Закрыть</button><PlayerPdfExport key={gameId} gameId={gameId} players={gameState.players} disabled={isRolling} /></div></div>}
-      {editing && activeGame && <PathEditor game={activeGame} admin={isAdmin} onClose={() => setEditing(false)} onSaved={g => { generation.current++; applyGame(g); setSelectedCell(null) }} />}
-      {/* Cell modal */}
-      {isAdmin && selectedCell !== null && (
-        <CellModal
-          cellNumber={selectedCell}
-          cells={cells}
-          onClose={() => setSelectedCell(null)}
-        />
-      )}
-    </div>
-  )
-}

@@ -12,22 +12,22 @@ export const SNAKES: Record<number, number> = {
   12: 8,
 };
 
-// Стрелы: начало → остриё (движение вверх)
+// Стрелы: основание → наконечник (движение вверх)
 export const ARROWS: Record<number, number> = {
-  10: 23,
-  17: 69,
-  20: 32,
-  22: 60,
-  27: 41,
-  28: 50,
-  37: 66,
-  45: 67,
-  46: 62,
   54: 68,
+  46: 62,
+  45: 67,
+  37: 66,
+  28: 50,
+  27: 41,
+  22: 60,
+  20: 32,
+  17: 69,
+  10: 23,
 };
 
 export const BOARD_SIZE = 72;
-export const FINAL_CELL = 72;
+export const FINAL_CELL = 68;
 export const COLS = 9;
 export const ROWS = 8;
 
@@ -45,21 +45,19 @@ export const DEFAULT_SETTINGS = {
   bounceOnOvershoot: false, // false = стоять, true = отскок
 };
 
-// Получить координаты центра клетки (в процентах) для наложения фишки
-// Нумерация "змейкой" снизу вверх
+// Нумерация "змейкой" снизу вверх:
+// Нечётные ряды снизу (1-й: 1–9, 3-й: 19–27, 5-й: 37–45, 7-й: 55–63) -> слева направо
+// Чётные ряды снизу (2-й: 10–18, 4-й: 28–36, 6-й: 46–54, 8-й: 64–72) -> справа налево
 export function getCellPosition(cellNumber: number): { row: number; col: number } {
   if (cellNumber < 1 || cellNumber > BOARD_SIZE) return { row: 0, col: 0 };
   const zeroIndex = cellNumber - 1;
   const rowFromBottom = Math.floor(zeroIndex / COLS);
   const posInRow = zeroIndex % COLS;
-  const row = ROWS - 1 - rowFromBottom; // row 0 = верх
-  // Чётные ряды (0,2,4,6 снизу) идут слева направо, нечётные — справа налево
+  const row = ROWS - 1 - rowFromBottom;
   const col = rowFromBottom % 2 === 0 ? posInRow : COLS - 1 - posInRow;
   return { row, col };
 }
 
-// Границы линий сетки в исходном изображении 2048 × 1536.
-// Изображение не меняется: координаты слоя учитывают заголовок и рамку.
 export const BOARD_IMAGE = { width: 2048, height: 1536 };
 export const GRID_X = [107, 311, 512, 717, 921.5, 1126, 1331, 1537.5, 1741, 1941.5];
 export const GRID_Y = [134, 299, 468.5, 632, 794, 956, 1122, 1285, 1442];
@@ -67,14 +65,57 @@ export const GRID_Y = [134, 299, 468.5, 632, 794, 956, 1122, 1285, 1442];
 export function getCellBounds(cellNumber: number) {
   const { row, col } = getCellPosition(cellNumber);
   return {
-    left: GRID_X[col] / BOARD_IMAGE.width * 100,
-    top: GRID_Y[row] / BOARD_IMAGE.height * 100,
-    width: (GRID_X[col + 1] - GRID_X[col]) / BOARD_IMAGE.width * 100,
-    height: (GRID_Y[row + 1] - GRID_Y[row]) / BOARD_IMAGE.height * 100,
+    left: (GRID_X[col] / BOARD_IMAGE.width) * 100,
+    top: (GRID_Y[row] / BOARD_IMAGE.height) * 100,
+    width: ((GRID_X[col + 1] - GRID_X[col]) / BOARD_IMAGE.width) * 100,
+    height: ((GRID_Y[row + 1] - GRID_Y[row]) / BOARD_IMAGE.height) * 100,
   };
 }
 
 export function getCellCenter(cellNumber: number): { x: number; y: number } {
   const bounds = getCellBounds(cellNumber);
   return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+}
+
+// Единая математическая функция расчёта хода строго после остановки фишки
+export function resolveMove(
+  fromCell: number,
+  roll: number,
+  bounceOnOvershoot: boolean
+): { landedCell: number; finalCell: number; transitionType: string | null } {
+  let landedCell = fromCell === 0 ? roll : fromCell + roll;
+
+  // Перелёт за пределы 72-й клетки
+  if (landedCell > BOARD_SIZE) {
+    if (bounceOnOvershoot) {
+      landedCell = BOARD_SIZE - (landedCell - BOARD_SIZE);
+    } else {
+      landedCell = fromCell;
+    }
+  }
+
+  // Проверка срабатывания происходит ОДИН РАЗ строго на клетке остановки (landedCell)
+  if (Object.prototype.hasOwnProperty.call(SNAKES, landedCell)) {
+    const tail = SNAKES[landedCell];
+    return {
+      landedCell,
+      finalCell: tail,
+      transitionType: `Змея: ${landedCell} → ${tail}`,
+    };
+  }
+
+  if (Object.prototype.hasOwnProperty.call(ARROWS, landedCell)) {
+    const tip = ARROWS[landedCell];
+    return {
+      landedCell,
+      finalCell: tip,
+      transitionType: `Стрела: ${landedCell} → ${tip}`,
+    };
+  }
+
+  return {
+    landedCell,
+    finalCell: landedCell,
+    transitionType: null,
+  };
 }

@@ -74,7 +74,7 @@ export function GameBoard({ gameState, onCellClick, userEmail, hideWatermark = f
                 const slot = occupants.findIndex(({ i }) => i === idx)
                 const offsetX = occupants.length > 1 ? (slot % 2 ? 1 : -1) * bounds.width * 0.2 : 0
                 const offsetY = occupants.length > 2 ? (slot < 2 ? -1 : 1) * bounds.height * 0.2 : 0
-                return <div key={idx} data-player-token={idx} data-position={player.position} aria-label={`${player.name}: клетка ${player.position}`} className="player-orb absolute z-30 pointer-events-none transition-[left,top] duration-700 ease-out" style={{ width: 'clamp(13px, 2.5vw, 26px)', height: 'clamp(13px, 2.5vw, 26px)', left: `${x + offsetX}%`, top: `${y + offsetY}%`, transform: 'translate(-50%, -50%)', '--orb-color': PLAYER_COLORS[idx] } as CSSProperties} />
+                return <div key={idx} data-player-token={idx} data-position={player.position} aria-label={`${player.name}: клетка ${player.position}`} className="player-orb absolute z-30 pointer-events-none transition-[left,top] duration-200 ease-out" style={{ width: 'clamp(13px, 2.5vw, 26px)', height: 'clamp(13px, 2.5vw, 26px)', left: `${x + offsetX}%`, top: `${y + offsetY}%`, transform: 'translate(-50%, -50%)', '--orb-color': PLAYER_COLORS[idx] } as CSSProperties} />
               })}
             </>}
           </div>
